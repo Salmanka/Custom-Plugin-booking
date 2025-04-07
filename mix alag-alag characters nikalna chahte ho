@@ -1,0 +1,8 @@
+<?php
+
+$result = "abbccacdfcffgaa";
+
+// Unique characters nikalne ka simple way
+$unique = implode('', array_unique(str_split($result)));
+
+echo $unique; // Output: abcdfg
