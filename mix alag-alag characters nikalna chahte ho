@@ -6,3 +6,17 @@ $result = "abbccacdfcffgaa";
 $unique = implode('', array_unique(str_split($result)));
 
 echo $unique; // Output: abcdfg
+
+
+<?php
+$str = "abbccacdfcffgaa";
+
+$output = '';
+
+foreach (count_chars($str) as $char => $count){
+    if($count == 1){
+        $output .= chr($char);
+    }
+}
+
+echo $output;
