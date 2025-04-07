@@ -1,0 +1,911 @@
+<?php
+
+   /**
+
+    * Plugin Name: Appointment Booking System
+
+    * Description: Online Custom appointment booking system.
+
+    * Version: 1.0
+
+    * Author: Salman
+
+    */
+
+   
+
+   // Prevent direct access
+
+   if (!defined('ABSPATH')) {
+
+       exit;
+
+   }
+
+   
+
+   // Activation hook to create database table
+
+   function abs_create_appointment_table() {
+
+       global $wpdb;
+
+       $table_name = $wpdb->prefix . 'appointments';
+
+       $charset_collate = $wpdb->get_charset_collate();
+
+   
+
+       $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+
+           id INT AUTO_INCREMENT PRIMARY KEY,
+
+           category VARCHAR(255) NOT NULL,
+
+           subcategory VARCHAR(255) NOT NULL,
+
+           service VARCHAR(255) NOT NULL,
+
+           price DECIMAL(10,2) NOT NULL,
+
+           name VARCHAR(255) NOT NULL,
+
+           email VARCHAR(100) NOT NULL,
+
+           phone VARCHAR(20) NOT NULL,
+
+           address TEXT NOT NULL,
+
+           appointment_date DATE NOT NULL,
+
+           appointment_time TIME NOT NULL,
+
+           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+       ) $charset_collate;";
+
+   
+
+       require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+       dbDelta($sql);
+
+   }
+
+   register_activation_hook(__FILE__, 'abs_create_appointment_table');
+
+   
+
+   // Category Taxonomy
+
+   function abs_register_category_taxonomy() {
+
+       register_taxonomy('appointment_category', 'abs_service', array(
+
+           'label' => 'Categories',
+
+           'hierarchical' => true,
+
+           'rewrite' => array('slug' => 'appointment-category'),
+
+           'show_admin_column' => true,
+
+           'show_in_rest' => true,
+
+       ));
+
+   }
+
+   add_action('init', 'abs_register_category_taxonomy');
+
+   
+
+   // Subcategory Taxonomy
+
+   function abs_register_subcategory_taxonomy() {
+
+       register_taxonomy('appointment_subcategory', 'abs_service', array(
+
+           'label' => 'Subcategories',
+
+           'hierarchical' => true,
+
+           'rewrite' => array('slug' => 'appointment-subcategory'),
+
+           'show_admin_column' => true,
+
+           'show_in_rest' => true,
+
+       ));
+
+   }
+
+   add_action('init', 'abs_register_subcategory_taxonomy');
+
+   
+
+   // Service Custom Post Type
+
+   function abs_register_service_post_type() {
+
+       register_post_type('abs_service', array(
+
+           'labels' => array(
+
+               'name' => 'Services',
+
+               'singular_name' => 'Service'
+
+           ),
+
+           'public' => true,
+
+           'menu_position' => 5,
+
+           'supports' => array('title'),
+
+           'show_in_rest' => true,
+
+       ));
+
+   }
+
+   add_action('init', 'abs_register_service_post_type');
+
+   
+
+   // Price Custom Field for Services
+
+   function abs_add_service_price_meta_box() {
+
+       add_meta_box(
+
+           'abs_service_price',
+
+           'Service Price',
+
+           'abs_service_price_meta_box_callback',
+
+           'abs_service',
+
+           'side',
+
+           'default'
+
+       );
+
+   }
+
+   add_action('add_meta_boxes', 'abs_add_service_price_meta_box');
+
+   
+
+   function abs_service_price_meta_box_callback($post) {
+
+       $price = get_post_meta($post->ID, '_abs_service_price', true);
+
+       ?>
+
+<label for="abs_service_price">Price (₹)</label>
+
+<input type="number" id="abs_service_price" name="abs_service_price" value="<?php echo esc_attr($price); ?>" step="0.01" min="0">
+
+<?php
+
+   }
+
+   
+
+   function abs_save_service_price($post_id) {
+
+       if (array_key_exists('abs_service_price', $_POST)) {
+
+           update_post_meta($post_id, '_abs_service_price', $_POST['abs_service_price']);
+
+       }
+
+   }
+
+   add_action('save_post', 'abs_save_service_price');
+
+   
+
+   
+
+   function abs_booking_form_shortcode() {
+
+       ob_start();
+
+       ?>
+
+<form method="POST" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="max-width: 450px; margin: 0 auto; background-color: #ffffff; padding: 25px; border: 2px solid #4CAF50; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); font-family: Arial, sans-serif;">
+
+   <input type="hidden" name="action" value="abs_handle_booking_submission_php">
+
+   <label for="category-dropdown" style="display: block; margin-bottom: 5px; font-weight: bold;">Category</label>
+
+   <select name="category" id="category-dropdown" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+      <option value="">Select Category</option>
+
+      <?php foreach (get_terms(['taxonomy' => 'appointment_category', 'hide_empty' => false]) as $category) : ?>
+
+      <option value="<?php echo esc_attr($category->name); ?>"><?php echo esc_html($category->name); ?></option>
+
+      <?php endforeach; ?>
+
+   </select>
+
+   <label for="subcategory-dropdown" style="display: block; margin-bottom: 5px; font-weight: bold;">Subcategory</label>
+
+   <select name="subcategory" id="subcategory-dropdown" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+      <option value="">Select Subcategory</option>
+
+      <?php foreach (get_terms(['taxonomy' => 'appointment_subcategory', 'hide_empty' => false]) as $subcategory) : ?>
+
+      <option value="<?php echo esc_attr($subcategory->name); ?>"><?php echo esc_html($subcategory->name); ?></option>
+
+      <?php endforeach; ?>
+
+   </select>
+
+   <label for="service-dropdown" style="display: block; margin-bottom: 5px; font-weight: bold;">Service</label>
+
+   <select name="service" id="service-dropdown" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+      <option value="">Select Service</option>
+
+      <?php foreach (get_posts(['post_type' => 'abs_service', 'numberposts' => -1]) as $service) : 
+
+         $price = get_post_meta($service->ID, '_abs_service_price', true); ?>
+
+      <option value="<?php echo esc_attr($service->post_title); ?>" data-price="<?php echo esc_attr($price); ?>">
+
+         <?php echo esc_html($service->post_title) . ' - ₹' . esc_html($price); ?>
+
+      </option>
+
+      <?php endforeach; ?>
+
+   </select>
+
+   <input type="hidden" name="price" id="price-field">
+
+   <label for="name">Your Name</label>
+
+   <input type="text" name="name" id="name" placeholder="Your Name" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+   <label for="email">Your Email</label>
+
+   <input type="email" name="email" id="email" placeholder="Your Email" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+   <label for="phone">Your Phone</label>
+
+   <input type="text" name="phone" id="phone" placeholder="Your Phone" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+   <label for="address">Your Address</label>
+
+   <textarea name="address" id="address" placeholder="Your Address" rows="3" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+
+   <label for="appointment_date">Appointment Date</label>
+
+   <input type="date" name="appointment_date" id="appointment_date" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+   <label for="appointment_time">Appointment Time</label>
+
+   <input type="time" name="appointment_time" id="appointment_time" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
+
+   <button type="submit" style="background-color: #4CAF50; color: #fff; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%;">Book Appointment</button>
+
+</form>
+
+<script>
+
+   document.getElementById('service-dropdown').addEventListener('change', function() {
+
+       const selectedOption = this.options[this.selectedIndex];
+
+       const price = selectedOption.getAttribute('data-price');
+
+       document.getElementById('price-field').value = price;
+
+   });
+
+</script>
+
+<?php
+
+   return ob_get_clean();
+
+   }
+
+   add_shortcode('appointment_booking', 'abs_booking_form_shortcode');
+
+   
+
+   
+
+   function abs_handle_booking_submission_php() {
+
+   global $wpdb;
+
+   $table_name = $wpdb->prefix . 'appointments';
+
+   
+
+   $wpdb->insert(
+
+       $table_name,
+
+       array(
+
+           'category'         => sanitize_text_field($_POST['category']),
+
+           'subcategory'      => sanitize_text_field($_POST['subcategory']),
+
+           'service'          => sanitize_text_field($_POST['service']),
+
+           'price'            => floatval($_POST['price']),
+
+           'name'             => sanitize_text_field($_POST['name']),
+
+           'email'            => sanitize_email($_POST['email']),
+
+           'phone'            => sanitize_text_field($_POST['phone']),
+
+           'address'          => sanitize_textarea_field($_POST['address']),
+
+           'appointment_date' => sanitize_text_field($_POST['appointment_date']),
+
+           'appointment_time' => sanitize_text_field($_POST['appointment_time']),
+
+       )
+
+   );
+
+   
+
+   echo "Appointment booked successfully!";
+
+   exit;
+
+   }
+
+   add_action('admin_post_abs_handle_booking_submission_php', 'abs_handle_booking_submission_php');
+
+   add_action('admin_post_nopriv_abs_handle_booking_submission_php', 'abs_handle_booking_submission_php');
+
+  // Add Admin Menu for Form Shortcode
+
+function abs_appointments_menu_shortcode() {
+
+    add_menu_page(
+
+        'Form Shortcode',                   // Page title
+
+        'Form Shortcode',                   // Menu title
+
+        'manage_options',                   // Capability
+
+        'form_appointments_shortcode',      // Menu slug
+
+        'abs_display_shortcode_details',    // Callback function
+
+        'dashicons-calendar',               // Icon (optional)
+
+        5                                    // Position (after Comments)
+
+    );
+
+}
+
+add_action('admin_menu', 'abs_appointments_menu_shortcode');
+
+
+
+// Callback Function to Display Content
+
+function abs_display_shortcode_details() {
+
+    ?>
+
+    <div class="wrap">
+
+        <h1>Appointment Booking Shortcode</h1>
+
+        <p>Copy this shortcode to display the booking form:</p>
+
+        <code>[appointment_booking]</code>
+
+    </div>
+
+    <?php
+
+}
+
+
+
+
+
+   
+
+   
+
+   // Add Admin Menu for Appointments functionality------------------------------------------------------------------------------------------
+
+   function abs_appointments_menu() {
+
+   add_menu_page(
+
+       'Appointments',                   // Page title
+
+       'Appointments',                   // Menu title
+
+       'manage_options',                 // Capability
+
+       'abs_appointments',               // Menu slug
+
+       'abs_display_appointments_page',  // Callback function
+
+       'dashicons-calendar',             // Icon (optional)
+
+       5                                // Position (after Comments)
+
+   );
+
+   }
+
+   add_action('admin_menu', 'abs_appointments_menu');
+
+   
+
+   // Display Appointments in Table with Pagination, Filters, and Export
+
+   function abs_display_appointments_page() {
+
+   global $wpdb;
+
+   $table_name = $wpdb->prefix . 'appointments';
+
+   
+
+   // Pagination Setup
+
+   $limit = 5;
+
+   $page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+
+   $offset = ($page - 1) * $limit;
+
+   
+
+   // Filter Conditions
+
+   $where = 'WHERE 1=1';
+
+   if (!empty($_GET['category'])) {
+
+       $where .= $wpdb->prepare(" AND category = %s", $_GET['category']);
+
+   }
+
+   if (!empty($_GET['status'])) {
+
+       $where .= $wpdb->prepare(" AND status = %s", $_GET['status']);
+
+   }
+
+   if (!empty($_GET['appointment_date'])) {
+
+       $where .= $wpdb->prepare(" AND appointment_date = %s", $_GET['appointment_date']);
+
+   }
+
+   
+
+   // Fetch Data
+
+   //$appointments = $wpdb->get_results("SELECT * FROM $table_name $where LIMIT $limit OFFSET $offset");
+
+   $appointments = $wpdb->get_results("SELECT * FROM $table_name $where ORDER BY appointment_date DESC, appointment_time DESC LIMIT $limit OFFSET $offset");
+
+   
+
+   
+
+   // Total Entries for Pagination
+
+   $total_items = $wpdb->get_var("SELECT COUNT(*) FROM $table_name $where");
+
+   $total_pages = ceil($total_items / $limit);
+
+   
+
+   ?>
+
+<div class="wrap">
+
+   <h1 class="wp-heading-inline">Appointments</h1>
+
+   <!-- Filter Form -->
+
+   <form method="GET">
+
+      <input type="hidden" name="page" value="abs_appointments">
+
+      <input type="date" name="appointment_date" value="<?php echo esc_attr($_GET['appointment_date'] ?? ''); ?>" placeholder="Filter by Date">
+
+      <input type="text" name="category" value="<?php echo esc_attr($_GET['category'] ?? ''); ?>" placeholder="Filter by Category">
+
+      <!-- Status Dropdown -->
+
+      <select name="status">
+
+         <option value="">All Status</option>
+
+         <option value="Pending" <?php selected($_GET['status'] ?? '', 'Pending'); ?>>Pending</option>
+
+         <option value="Complete" <?php selected($_GET['status'] ?? '', 'Complete'); ?>>Complete</option>
+
+      </select>
+
+      <input type="submit" value="Filter" class="button button-primary">
+
+   </form>
+
+   <!-- Excel Download Button -->
+
+   <a href="<?php echo admin_url('admin-post.php?action=abs_export_excel'); ?>" class="button button-secondary">Export to Excel</a>
+
+   <!-- Appointments Table -->
+
+   <table class="wp-list-table widefat fixed striped">
+
+      <thead>
+
+         <tr>
+
+            <th>ID</th>
+
+            <th>Category</th>
+
+            <th>Subcategory</th>
+
+            <th>Service</th>
+
+            <th>Price</th>
+
+            <th>Customer Name</th>
+
+            <th>Email</th>
+
+            <th>Phone</th>
+
+            <th>Address</th>
+
+            <th>Appointment Date</th>
+
+            <th>Appointment Time</th>
+
+            <th>Status</th>
+
+            <th>Actions</th>
+
+         </tr>
+
+      </thead>
+
+      <tbody>
+
+         <?php foreach ($appointments as $appointment) : ?>
+
+         <tr>
+
+            <td><?php echo esc_html($appointment->id); ?></td>
+
+            <td><?php echo esc_html($appointment->category); ?></td>
+
+            <td><?php echo esc_html($appointment->subcategory); ?></td>
+
+            <td><?php echo esc_html($appointment->service); ?></td>
+
+            <td><?php echo esc_html($appointment->price); ?></td>
+
+            <td><?php echo esc_html($appointment->name); ?></td>
+
+            <td><?php echo esc_html($appointment->email); ?></td>
+
+            <td><?php echo esc_html($appointment->phone); ?></td>
+
+            <td><?php echo esc_html($appointment->address); ?></td>
+
+            <td><?php echo esc_html($appointment->appointment_date); ?></td>
+
+            <td><?php echo esc_html($appointment->appointment_time); ?></td>
+
+            <!-- Status Dropdown in Table -->
+
+            <td>
+
+               <form method="POST" action="">
+
+                  <input type="hidden" name="update_status_id" value="<?php echo $appointment->id; ?>">
+
+                  <select name="status" onchange="this.form.submit()">
+
+                     <option value="Pending" <?php selected($appointment->status, 'Pending'); ?>>Pending</option>
+
+                     <option value="Complete" <?php selected($appointment->status, 'Complete'); ?>>Complete</option>
+
+                  </select>
+
+               </form>
+
+            </td>
+
+            <td style="padding-left: 10px;">
+
+               <a href="?page=abs_appointments&delete_id=<?php echo $appointment->id; ?>" class="button button-danger">Delete</a>
+
+            </td>
+
+         </tr>
+
+         <?php endforeach; ?>
+
+      </tbody>
+
+   </table>
+
+   <!-- Pagination -->
+
+   <div class="tablenav">
+
+      <div class="tablenav-pages">
+
+         <?php
+
+            for ($i = 1; $i <= $total_pages; $i++) {
+
+                echo "<a class='button' href='?page=abs_appointments&paged=$i'>$i</a> ";
+
+            }
+
+            ?>
+
+      </div>
+
+   </div>
+
+</div>
+
+<?php
+
+// Handle Delete Operation
+
+if (isset($_GET['delete_id'])) {
+
+$delete_id = intval($_GET['delete_id']);
+
+$wpdb->delete($table_name, array('id' => $delete_id));
+
+echo '
+
+<div class="notice notice-success is-dismissible">
+
+   <p>Appointment deleted successfully!</p>
+
+</div>
+
+';
+
+}
+
+// Handle Status Update Operation
+
+if (isset($_POST['update_status_id']) && isset($_POST['status'])) {
+
+$update_status_id = intval($_POST['update_status_id']);
+
+$new_status = sanitize_text_field($_POST['status']);
+
+$wpdb->update($table_name, array('status' => $new_status), array('id' => $update_status_id));
+
+echo '
+
+<div class="notice notice-success is-dismissible">
+
+   <p>Status updated successfully!</p>
+
+</div>
+
+';
+
+}
+
+}
+
+// Export Data to Excel
+
+function abs_export_excel() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'appointments';
+
+    // Correct headers for CSV file
+    header("Content-Type: text/csv");
+    header("Content-Disposition: attachment; filename=appointments_data.csv");
+    header("Cache-Control: max-age=0");
+
+    // Open output buffer
+    $output = fopen('php://output', 'w');
+
+    // Add BOM (Byte Order Mark) for encoding fix
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+    // Add column headers
+    fputcsv($output, [
+        'ID', 'Category', 'Subcategory', 'Service', 'Price', 
+        'Name', 'Email', 'Phone', 'Address', 'Appointment Date', 
+        'Appointment Time', 'Status'
+    ]);
+
+    // Fetch data and populate rows
+    $appointments = $wpdb->get_results("SELECT * FROM $table_name");
+    foreach ($appointments as $appointment) {
+        fputcsv($output, [
+            $appointment->id, $appointment->category, $appointment->subcategory,
+            $appointment->service, $appointment->price, $appointment->name,
+            $appointment->email, $appointment->phone, $appointment->address,
+            $appointment->appointment_date, $appointment->appointment_time,
+            $appointment->status
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+add_action('admin_post_abs_export_excel', 'abs_export_excel');
+
+
+/// Get Post API create 
+
+function post_api_get(){
+    register_rest_route('my-first-api/v1', '/posts', array(
+        'methods' => 'GET',
+        'callback' => 'get_post_api',
+        'permission_callback' =>'__return_true'
+    ));
+}
+
+add_action('rest_api_init', 'post_api_get');
+
+//functiona handle get request
+
+function get_post_api($request){
+    $args = array(
+        'post_type' => 'post',
+        'posts_per_page' => -1
+    );
+
+    $posts = get_posts($args);
+
+    $response_data = array();
+    foreach($posts as $post){
+        $response_data[] = array(
+            'id' => $post->ID,
+            'title' => $post->post_title,
+            'content' => $post->post_content,
+        );
+    }
+
+    return wp_send_json_success($response_data);
+}
+
+
+///backend me show post 
+
+function custom_admin_menu_page() {
+    add_menu_page(
+        'Custom API Posts', // Page Title
+        'API Posts', // Menu Title
+        'manage_options', // Capability
+        'custom-api-posts', // Menu Slug
+        'display_api_posts', // Callback Function
+        'dashicons-admin-post', // Icon
+        6 // Position
+    );
+}
+
+add_action('admin_menu', 'custom_admin_menu_page');
+
+function display_api_posts() {
+    $api_url = get_site_url() . '/wp-json/my-first-api/v1/posts';
+    $response = wp_remote_get($api_url);
+
+    if (is_wp_error($response)) {
+        echo '<div class="error"><p>Failed to fetch the API data.</p></div>';
+        return;
+    }
+
+    $responseBody = wp_remote_retrieve_body($response);
+    $result = json_decode($responseBody, true);
+
+    if (!isset($result['success']) || !$result['success'] || empty($result['data'])) {
+        echo '<div class="error"><p>Posts are not available.</p></div>';
+        return;
+    }
+
+    $posts = $result['data'];
+
+    // Inline CSS
+    echo '<style>
+        .posts-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .post-card {
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out;
+            background: #fff;
+            text-align: center;
+        }
+        .post-card:hover {
+            transform: translateY(-5px);
+        }
+        .post-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+        }
+        .post-card .post-content {
+            padding: 15px;
+        }
+        .post-card h2 {
+            font-size: 18px;
+            margin: 10px 0;
+            color: #333;
+        }
+        .post-card p {
+            font-size: 14px;
+            color: #666;
+        }
+        .post-card a {
+            text-decoration: none;
+            display: block;
+            color: inherit;
+        }
+    </style>';
+
+    // Posts HTML
+    echo '<div class="posts-container">';
+    foreach ($posts as $post) {
+        $post_id = $post['id'];
+        $post_title = esc_html($post['title']);
+         $post_content = wp_trim_words(wp_strip_all_tags($post['content']), 20, '...'); 
+        $post_url = esc_url(get_permalink($post_id));
+        $post_image = esc_url(get_the_post_thumbnail_url($post_id, 'medium'));
+
+        if (!$post_image) {
+            $post_image = 'https://via.placeholder.com/300x180?text=No+Image'; // Placeholder if no image
+        }
+
+        echo "<div class='post-card'>
+                <a href='{$post_url}' target='_blank'>
+                    <img src='{$post_image}' alt='{$post_title}'>
+                    <div class='post-content'>
+                        <h2>{$post_title}</h2>
+                        <p>{$post_content}</p>
+                    </div>
+                </a>
+            </div>";
+    }
+    echo '</div>';
+}
