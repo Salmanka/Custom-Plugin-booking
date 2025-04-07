@@ -20,3 +20,15 @@ foreach (count_chars($str) as $char => $count){
 }
 
 echo $output;
+
+
+
+<?php
+
+$result = "abbccacdfcffgaa";
+
+$unique = array_unique(str_split($result));
+$minChar = min($unique);
+
+echo "Unique Characters: " . implode('', $unique) . "\n";
+echo "Min Character: " . $minChar;
