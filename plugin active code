@@ -1,0 +1,16 @@
+if ( ! defined( 'ABSPATH' ) ) {
+    exit; // Exit if accessed directly
+}
+
+function salman_custom_menu_activate() {
+    update_option( 'salman_custom_menu_activated', 'yes' );
+}
+register_activation_hook( __FILE__, 'salman_custom_menu_activate' );
+
+function salman_custom_menu_admin_init() {
+    if ( is_admin() && get_option( 'salman_custom_menu_activated' ) === 'yes' ) {
+        error_log('Salman Custom Menu plugin activated and running setup.');
+        delete_option( 'salman_custom_menu_activated' );
+    }
+}
+add_action( 'admin_init', 'salman_custom_menu_admin_init' );
