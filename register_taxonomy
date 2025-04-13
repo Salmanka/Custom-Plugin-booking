@@ -1,0 +1,28 @@
+function taxonomies_in_post(){
+    register_taxonomy('location', 'post', array(
+        'hierarchical' =>true,
+        'labels'=>array(
+            'name'=> _x('Location', 'taxonomy general name'),
+            'singular_name' => _x( 'Locations', 'taxonomy singular name' ),
+            'search_items' =>__('Search Location'),
+            'all_items' =>__('All Location'),
+            'parent_item' =>__('Parent Location'),
+            'parent_item_colon' =>__('Parent Location:'),
+            'edit_item' =>__('Edit Location'),
+            'update_item' =>__('Update Location'),
+            'add_new_item' =>__('Add New Location'),
+            'new_item_name' => __( 'New Location Name' ),
+            'menu_name' =>__('Location'),
+        ),
+        'rewrite'=>array(
+            'slug'=>'locations',
+            'with_front'=>false,
+            'hierarchical'=>true
+        ),
+        'show_ui' => true,
+        'show_admin_column' => true,
+        'show_in_rest' => true, // Important if you're using Gutenberg/Block Editor
+        'public' => true,
+    ));
+}
+add_action('init','taxonomies_in_post' );
