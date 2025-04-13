@@ -1,0 +1,106 @@
+// 1. Frontend HTML + JavaScript + ajaxurl inject karo
+add_shortcode('my_ajax_form', function() {
+    ob_start();
+    ?>
+    <form id="my-ajax-form">
+        <input type="text" name="name" placeholder="Enter Name" required>
+        <input type="email" name="email" placeholder="Enter Email" required>
+        <button type="submit">Submit</button>
+    </form>
+    <div id="form-response"></div>
+
+    <script type="text/javascript">
+    var ajaxurl = "<?php echo admin_url('admin-ajax.php'); ?>";
+
+    jQuery(document).ready(function($) {
+        $('#my-ajax-form').on('submit', function(e) {
+            e.preventDefault();
+            var formData = $(this).serialize();
+
+            $.ajax({
+                type: 'POST',
+                url: ajaxurl,
+                data: {
+                    action: 'submit_my_form',
+                    form_data: formData
+                },
+                success: function(response) {
+                    $('#form-response').html('<p>' + response + '</p>');
+                }
+            });
+        });
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+});
+
+
+// 2. Backend PHP handler for AJAX request
+add_action('wp_ajax_submit_my_form', 'handle_my_ajax_form');
+add_action('wp_ajax_nopriv_submit_my_form', 'handle_my_ajax_form');
+
+function handle_my_ajax_form() {
+    parse_str($_POST['form_data'], $form_data);
+
+    $name = sanitize_text_field($form_data['name']);
+    $email = sanitize_email($form_data['email']);
+
+    // Example: You can save to DB or send email here
+    echo "Thank you, $name! Your email ($email) has been received.";
+
+    wp_die(); // always needed in AJAX
+}
+// 1. Frontend HTML + JavaScript + ajaxurl inject karo
+add_shortcode('my_ajax_form', function() {
+    ob_start();
+    ?>
+    <form id="my-ajax-form">
+        <input type="text" name="name" placeholder="Enter Name" required>
+        <input type="email" name="email" placeholder="Enter Email" required>
+        <button type="submit">Submit</button>
+    </form>
+    <div id="form-response"></div>
+
+    <script type="text/javascript">
+    var ajaxurl = "<?php echo admin_url('admin-ajax.php'); ?>";
+
+    jQuery(document).ready(function($) {
+        $('#my-ajax-form').on('submit', function(e) {
+            e.preventDefault();
+            var formData = $(this).serialize();
+
+            $.ajax({
+                type: 'POST',
+                url: ajaxurl,
+                data: {
+                    action: 'submit_my_form',
+                    form_data: formData
+                },
+                success: function(response) {
+                    $('#form-response').html('<p>' + response + '</p>');
+                }
+            });
+        });
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+});
+
+
+// 2. Backend PHP handler for AJAX request
+add_action('wp_ajax_submit_my_form', 'handle_my_ajax_form');
+add_action('wp_ajax_nopriv_submit_my_form', 'handle_my_ajax_form');
+
+function handle_my_ajax_form() {
+    parse_str($_POST['form_data'], $form_data);
+
+    $name = sanitize_text_field($form_data['name']);
+    $email = sanitize_email($form_data['email']);
+
+    // Example: You can save to DB or send email here
+    echo "Thank you, $name! Your email ($email) has been received.";
+
+    wp_die(); // always needed in AJAX
+}
