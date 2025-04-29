@@ -1,0 +1,96 @@
+// 1. Register Custom Post Type
+function create_book_post_type() {
+    register_post_type('book', [
+        'labels' => [
+            'name' => __('Books'),
+            'singular_name' => __('Book')
+        ],
+        'public' => true,
+        'has_archive' => true,
+        'rewrite' => ['slug' => 'books'],
+        'supports' => ['title', 'editor'],
+        'show_in_rest' => true,
+    ]);
+}
+add_action('init', 'create_book_post_type');
+
+// 2. Register Custom Taxonomy
+function create_genre_taxonomy() {
+    register_taxonomy('genre', 'book', [
+        'label' => __('Genres'),
+        'rewrite' => ['slug' => 'genre'],
+        'hierarchical' => true,
+        'show_in_rest' => true,
+    ]);
+}
+add_action('init', 'create_genre_taxonomy');
+
+// 3. Shortcode for Dropdown + Results (Add this to a page using [genre_filter])
+function genre_filter_shortcode() {
+    $terms = get_terms([
+        'taxonomy' => 'genre',
+        'hide_empty' => false
+    ]);
+
+    ob_start(); ?>
+    <select id="genre-select">
+        <option value="">Select Genre</option>
+        <?php foreach ($terms as $term): ?>
+            <option value="<?php echo $term->term_id; ?>"><?php echo $term->name; ?></option>
+        <?php endforeach; ?>
+    </select>
+
+    <div id="book-results" style="margin-top:20px;"></div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        $('#genre-select').on('change', function() {
+            let genre_id = $(this).val();
+            $.ajax({
+                url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                type: 'POST',
+                data: {
+                    action: 'filter_books_by_genre',
+                    genre_id: genre_id
+                },
+                success: function(response) {
+                    $('#book-results').html(response);
+                }
+            });
+        });
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('genre_filter', 'genre_filter_shortcode');
+
+// 4. AJAX Handler
+function filter_books_by_genre() {
+    $genre_id = intval($_POST['genre_id']);
+
+    $args = [
+        'post_type' => 'book',
+        'tax_query' => [
+            [
+                'taxonomy' => 'genre',
+                'field' => 'term_id',
+                'terms' => $genre_id
+            ]
+        ]
+    ];
+
+    $query = new WP_Query($args);
+
+    if ($query->have_posts()) {
+        while ($query->have_posts()) {
+            $query->the_post();
+            echo '<p><a href="' . get_permalink() . '">' . get_the_title() . '</a></p>';
+        }
+    } else {
+        echo '<p>No books found.</p>';
+    }
+    wp_die();
+}
+add_action('wp_ajax_filter_books_by_genre', 'filter_books_by_genre');
+add_action('wp_ajax_nopriv_filter_books_by_genre', 'filter_books_by_genre');
